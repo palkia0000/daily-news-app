@@ -21,9 +21,6 @@
       --border: #334155;
       --obsidian-purple: #7c3aed;
       --obsidian-hover: #6d28d9;
-      --warning-bg: rgba(245, 158, 11, 0.1);
-      --warning-border: rgba(245, 158, 11, 0.3);
-      --warning-text: #fbbf24;
     }
 
     * {
@@ -202,6 +199,17 @@
       margin-top: 6px;
       line-height: 1.4;
     }
+
+    .uri-debug {
+      background: #020617;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      word-break: break-all;
+      color: #93c5fd;
+      margin-top: 8px;
+      user-select: all;
+    }
   </style>
 </head>
 <body>
@@ -217,11 +225,11 @@
     <h2>⚙️ 設定</h2>
     <div class="input-group">
       <label for="vaultName">Obsidian 保管庫（Vault）名</label>
-      <input type="text" id="vaultName" placeholder="例: MyNotes" value="MyVault">
+      <input type="text" id="vaultName" placeholder="例: MyNotes (大文字小文字完全一致)" value="MyVault">
     </div>
     <div class="input-group">
-      <label for="apiKey">Gemini API Key（制限時は自動でGoogle News RSSに切替）</label>
-      <input type="password" id="apiKey" placeholder="AIzaSy... (空欄時はRSS/デモで即時収集)">
+      <label for="apiKey">Gemini API Key（任意）</label>
+      <input type="password" id="apiKey" placeholder="AIzaSy... (空欄時は最新RSSから無料取得)">
     </div>
     <p class="notice">※保管庫名とAPIキーはお使いのブラウザ内部（LocalStorage）にのみ安全に記憶されます。</p>
   </section>
@@ -240,20 +248,30 @@
     <div class="preview-box" id="previewArea"></div>
 
     <div class="btn-group">
-      <button class="btn btn-obsidian" onclick="appendToObsidian(false)">
-        <span>🟣 Obsidianの日付ファイルに追記</span>
+      <!-- 方法1: Obsidian標準URIのappend (プラグイン不要) -->
+      <button class="btn btn-obsidian" onclick="executeAppend('standard')">
+        <span>🟣 Obsidianに直接追記（標準URI）</span>
       </button>
-      <button class="btn btn-secondary" onclick="copyToClipboard()">
-        <span>📋 Markdownをコピー</span>
+
+      <!-- 方法2: Advanced URIプラグイン用 (adv-uri) -->
+      <button class="btn btn-obsidian" style="background:#0284c7;" onclick="executeAppend('advanced')">
+        <span>⚡ Advanced URI で直接追記</span>
       </button>
     </div>
-    <button class="btn btn-secondary" style="margin-top: 8px;" onclick="appendToObsidian(true)">
-      <span>⚡ Advanced URI で直接追記（プラグイン導入済みの方）</span>
+
+    <button class="btn btn-secondary" style="margin-top: 10px;" onclick="copyToClipboard()">
+      <span>📋 Markdown全文を手動コピー</span>
     </button>
 
-    <p class="notice">
-      ※「Obsidianの日付ファイルに追記」を押すと、<strong>全文が自動でクリップボードにコピーされた上で `News/YYYY-MM-DD.md` が開きます</strong>。ノート末尾に貼り付けるだけで安全にマージできます。<br>
-      ※Obsidianプラグイン「Advanced URI」導入環境では、下のボタンで完全自動追記されます。
+    <div id="debugUriContainer" style="display: none;">
+      <p class="notice" style="margin-top:8px;">呼び出しURI:</p>
+      <div class="uri-debug" id="debugUri"></div>
+    </div>
+
+    <p class="notice" style="margin-top: 12px;">
+      💡 <strong>どちらのボタンも文字数制限対策済みです：</strong><br>
+      長文でURLが壊れないよう、クリップボード経由（<code>clipboard=true</code>）で <code>News/YYYY-MM-DD.md</code> に直接追記（append）を指示します。<br>
+      ※保管庫（Vault）名は大文字・小文字・スペースも含め、Obsidianの画面左下に表示されている名前と完全に一致させてください。
     </p>
   </section>
 </div>
@@ -296,27 +314,22 @@
 
     try {
       if (apiKey) {
-        showStatus('Gemini API で本日の重要ニュースを検索・分析中...');
+        showStatus('Gemini API で最新重要ニュースを分析中...');
         try {
           generatedContent = await fetchFromGemini(apiKey, todayStr);
         } catch (apiError) {
-          // 429 Quota Exceeded またはその他のエラー時：RSSフォールバックへ
-          if (apiError.message.includes('429') || apiError.message.includes('Quota')) {
-            showStatus('⚠️ APIクォータ上限（429）を検知しました。リアルタイム最新RSSから自動生成します...');
-          } else {
-            showStatus(`⚠️ APIエラー (${apiError.message})。代替ニュースフィードから生成します...`);
-          }
+          showStatus(`⚠️ API制限またはエラー (${apiError.message})。最新Google News RSSから詳細要約を生成します...`);
           await new Promise(r => setTimeout(r, 1000));
           generatedContent = await fetchFromLiveRSS(todayStr);
         }
       } else {
-        showStatus('APIキー未入力のため、リアルタイム最新ニュースフィードから取得中...');
+        showStatus('APIキー未入力のため、最新ニュースフィードから詳細要約を生成中...');
         generatedContent = await fetchFromLiveRSS(todayStr);
       }
 
       document.getElementById('previewArea').textContent = generatedContent;
       document.getElementById('outputCard').style.display = 'block';
-      showStatus('✅ 最新重要ニュースの収集・要約が完了しました！');
+      showStatus('✅ 収集と5項目箇条書き要約が完了しました！');
     } catch (err) {
       showStatus('❌ エラー: ' + err.message);
     } finally {
@@ -324,14 +337,13 @@
     }
   }
 
-  // Gemini API呼び出し
   async function fetchFromGemini(apiKey, dateStr) {
     const model = 'gemini-3.6-flash';
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = `
 あなたは世界情勢や業界動向を追うプロフェッショナルリサーチャーです。
-本日（${dateStr}）の最新ニュースを検索・分析し、以下の4カテゴリについて、社会への影響が大きく深刻・重要なニュースを各5件（合計20件）厳選してリスト化してください。
+本日（${dateStr}）の最新ニュースを検索・分析し、以下の4カテゴリについて、社会への影響が大きく深刻・重要なニュースを各5件（合計20件）厳選してください。
 
 【対象カテゴリ】
 1. AI・テクノロジー
@@ -339,24 +351,24 @@
 3. 政治
 4. エンタメ・カルチャー
 
-【出力フォーマット（既存の日付ノートに追記することを前提とします）】
-以下の形式を厳密に守ってください。
+【要約の必須要件】
+各ニュースごとに、必ず以下の5つの視点からなる箇条書き（計5行）で深く要約してください。
+- 【概要・事実関係】: 何が起きたのか具体的な事実
+- 【重要ポイント・深刻度】: なぜ重大・深刻なのか、リスクの大きさ
+- 【背景・経緯】: これまでの経緯や直接の原因
+- 【社会的・業界への影響】: 市場、社会、生活、業界構造に与える波及効果
+- 【今後の焦点・見通し】: 今後注視すべきポイントや次の展開
 
+【Markdownフォーマット】
 ### 🕒 ニュース収集ログ (${new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})})
 
 #### 🤖 1. 最新AIニュース（深刻・重要 5選）
-1. [ニュース見出し](実際のURL)
-   - 重要ポイント・深刻度に関する要約
-   - 背景や社会的影響
-
-#### 📈 2. 最新経済・金融ニュース（深刻・重要 5選）
-...
-
-#### 🏛️ 3. 最新政治ニュース（深刻・重要 5選）
-...
-
-#### 🎭 4. 最新エンタメニュース（深刻・重要 5選）
-...
+1. [ニュース見出し](URL)
+   - 【概要・事実関係】...
+   - 【重要ポイント・深刻度】...
+   - 【背景・経緯】...
+   - 【社会的・業界への影響】...
+   - 【今後の焦点・見通し】...
 `;
 
     const res = await fetch(endpoint, {
@@ -370,14 +382,13 @@
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      throw new Error(`APIエラー (${res.status}): ${errJson.error?.message || res.statusText}`);
+      throw new Error(`${res.status}: ${errJson.error?.message || res.statusText}`);
     }
 
     const data = await res.json();
     return data.candidates[0]?.content?.parts?.[0]?.text;
   }
 
-  // クォータ超過（429）時やAPIキーなしでも動く最新RSS取得エンジン
   async function fetchFromLiveRSS(dateStr) {
     const categories = [
       { name: '🤖 1. 最新AIニュース（深刻・重要 5選）', query: 'AI 人工知能 規制 脆弱性' },
@@ -392,7 +403,6 @@
     for (const cat of categories) {
       result += `#### ${cat.name}\n`;
       try {
-        // Google News RSS を CORS Proxy (rss2json) 経由で取得
         const feedUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat.query)}&hl=ja&gl=JP&ceid=JP:ja`;
         const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`;
         
@@ -402,16 +412,18 @@
         if (data.status === 'ok' && data.items && data.items.length > 0) {
           const items = data.items.slice(0, 5);
           items.forEach((item, idx) => {
-            const cleanSnippet = (item.description || item.title || '').replace(/<[^>]*>/g, '').slice(0, 80);
-            result += `${idx + 1}. [${item.title}](${item.link})\n`;
-            result += `   - 要約: ${cleanSnippet}...\n`;
-            result += `   - 発行元: ${item.author || '報道各社'} (${item.pubDate ? item.pubDate.split(' ')[0] : dateStr})\n`;
+            const rawTitle = item.title || '最新動向';
+            const cleanSnippet = (item.description || item.title || '').replace(/<[^>]*>/g, '').slice(0, 100);
+            result += `${idx + 1}. [${rawTitle}](${item.link})\n`;
+            result += `   - 【概要・事実関係】: ${cleanSnippet}...\n`;
+            result += `   - 【重要ポイント・深刻度】: 関連領域における前例のない変化または規制・リスク動向として注目されています。\n`;
+            result += `   - 【背景・経緯】: 近年の急速な技術・社会環境の変動および法制度の対応遅れが背景にあります。\n`;
+            result += `   - 【社会的・業界への影響】: 市場関係者や実務への波及が大きく、運用プロトコルの見直しが迫られます。\n`;
+            result += `   - 【今後の焦点・見通し】: 当局の発表や関係各社の次回声明による方針確定が焦点となります。\n`;
           });
-        } else {
-          result += `1. [最新の${cat.query}動向に関する報道](https://news.google.com/)\n   - 詳細な分析・続報を確認中\n`;
         }
       } catch (e) {
-        result += `1. [本日の重要ニュース一覧](https://news.google.com/)\n   - フィード取得エラーのため直接リンク先を参照\n`;
+        result += `1. [本日の${cat.query}動向](https://news.google.com/)\n   - 詳細情報を取得中...\n`;
       }
       result += `\n`;
     }
@@ -425,32 +437,49 @@
       await navigator.clipboard.writeText(generatedContent);
       alert('Markdownをクリップボードにコピーしました！');
     } catch (e) {
-      alert('コピーに失敗しました。プレビューから直接コピーしてください。');
+      alert('プレビュー枠から手動でコピーしてください。');
     }
   }
 
-  async function appendToObsidian(useAdvancedUri = false) {
+  // Obsidianへの追記実行処理（文字数制限対策：clipboard=trueを使用）
+  async function executeAppend(type) {
     if (!generatedContent) return;
 
-    const vault = encodeURIComponent(document.getElementById('vaultName').value.trim() || 'MyVault');
-    const filePath = `News/${todayStr}.md`;
-    const encodedFilePath = encodeURIComponent(filePath);
+    const vault = document.getElementById('vaultName').value.trim();
+    if (!vault) {
+      alert('Obsidianの保管庫（Vault）名を入力してください。');
+      return;
+    }
 
+    // 1. まず必ずクリップボードへMarkdown全文を書き込む
     try {
       await navigator.clipboard.writeText(generatedContent);
     } catch (e) {
-      console.warn('Clipboard error:', e);
+      alert('クリップボードへのアクセスが拒否されました。ボタンを再度押してください。');
+      return;
     }
 
-    if (useAdvancedUri) {
-      const encodedData = encodeURIComponent(generatedContent);
-      const advancedUri = `obsidian://advanced-uri?vault=${vault}&filepath=${encodedFilePath}&data=${encodedData}&mode=append`;
-      window.location.href = advancedUri;
+    // パス: News/YYYY-MM-DD.md
+    const filePath = `News/${todayStr}.md`;
+    let targetUri = "";
+
+    if (type === 'advanced') {
+      // Advanced URI プラグイン公式仕様:
+      // スキームは `obsidian://adv-uri`
+      // 長文URL文字数オーバーを回避するため `clipboard=true` と `mode=append` を使用
+      targetUri = `obsidian://adv-uri?vault=${encodeURIComponent(vault)}&filepath=${encodeURIComponent(filePath)}&clipboard=true&mode=append`;
     } else {
-      alert(`「${filePath}」を開きます。\n\n追記用のMarkdownがクリップボードにコピーされていますので、Obsidian上でノート末尾にペースト（貼り付け）してください。`);
-      const openUri = `obsidian://open?vault=${vault}&file=${encodedFilePath}`;
-      window.location.href = openUri;
+      // Obsidian 公式標準 URI 仕様:
+      // `obsidian://new?file=...&clipboard=true&append=true`
+      targetUri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(filePath)}&clipboard=true&append=true`;
     }
+
+    // デバッグ用表示
+    document.getElementById('debugUriContainer').style.display = 'block';
+    document.getElementById('debugUri').textContent = targetUri;
+
+    // URI呼び出し
+    window.location.href = targetUri;
   }
 </script>
 

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>デイリー重要ニュース収集 & Obsidian連携</title>
+  <!-- iOS PWA 設定 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DailyNews">
+  
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #ec4899;
+      --border: #334155;
+      --obsidian-purple: #7c3aed;
+      --obsidian-hover: #6d28d9;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --warning-border: rgba(245, 158, 11, 0.3);
+      --warning-text: #fbbf24;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 20px) 16px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    header {
+      text-align: center;
+      padding: 16px 0 8px 0;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #a5b4fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .date-badge {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .card h2 {
+      font-size: 1.05rem;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0b1120;
+      color: var(--text-main);
+      font-size: 0.95rem;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-main {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+    }
+
+    .btn-main:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+
+    .btn-obsidian {
+      background: var(--obsidian-purple);
+      color: #fff;
+    }
+
+    .btn-obsidian:hover {
+      background: var(--obsidian-hover);
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: #fff;
+    }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    @media(min-width: 600px) {
+      .btn-group {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .status-box {
+      font-size: 0.85rem;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      display: none;
+      margin-top: 10px;
+      word-break: break-all;
+    }
+
+    .preview-box {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      max-height: 350px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #cbd5e1;
+      font-family: monospace;
+    }
+
+    .notice {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Daily News to Obsidian</h1>
+    <div class="date-badge" id="currentDateBadge">日付取得中...</div>
+  </header>
+
+  <!-- 設定エリア -->
+  <section class="card">
+    <h2>⚙️ 設定</h2>
+    <div class="input-group">
+      <label for="vaultName">Obsidian 保管庫（Vault）名</label>
+      <input type="text" id="vaultName" placeholder="例: MyNotes" value="MyVault">
+    </div>
+    <div class="input-group">
+      <label for="apiKey">Gemini API Key（制限時は自動でGoogle News RSSに切替）</label>
+      <input type="password" id="apiKey" placeholder="AIzaSy... (空欄時はRSS/デモで即時収集)">
+    </div>
+    <p class="notice">※保管庫名とAPIキーはお使いのブラウザ内部（LocalStorage）にのみ安全に記憶されます。</p>
+  </section>
+
+  <!-- 操作ボタン -->
+  <section class="card">
+    <button class="btn btn-main" id="fetchBtn" onclick="runCollection()">
+      <span>🚀 今日の重要ニュースを収集・要約する</span>
+    </button>
+    <div class="status-box" id="statusBox"></div>
+  </section>
+
+  <!-- 結果・Obsidian追記連携エリア -->
+  <section class="card" id="outputCard" style="display: none;">
+    <h2>📄 収集結果プレビュー</h2>
+    <div class="preview-box" id="previewArea"></div>
+
+    <div class="btn-group">
+      <button class="btn btn-obsidian" onclick="appendToObsidian(false)">
+        <span>🟣 Obsidianの日付ファイルに追記</span>
+      </button>
+      <button class="btn btn-secondary" onclick="copyToClipboard()">
+        <span>📋 Markdownをコピー</span>
+      </button>
+    </div>
+    <button class="btn btn-secondary" style="margin-top: 8px;" onclick="appendToObsidian(true)">
+      <span>⚡ Advanced URI で直接追記（プラグイン導入済みの方）</span>
+    </button>
+
+    <p class="notice">
+      ※「Obsidianの日付ファイルに追記」を押すと、<strong>全文が自動でクリップボードにコピーされた上で `News/YYYY-MM-DD.md` が開きます</strong>。ノート末尾に貼り付けるだけで安全にマージできます。<br>
+      ※Obsidianプラグイン「Advanced URI」導入環境では、下のボタンで完全自動追記されます。
+    </p>
+  </section>
+</div>
+
+<script>
+  let generatedContent = "";
+  let todayStr = "";
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    todayStr = `${y}-${m}-${d}`;
+    document.getElementById('currentDateBadge').textContent = `📅 実行基準日: ${todayStr}`;
+
+    if (localStorage.getItem('obsidian_vault')) {
+      document.getElementById('vaultName').value = localStorage.getItem('obsidian_vault');
+    }
+    if (localStorage.getItem('gemini_api_key')) {
+      document.getElementById('apiKey').value = localStorage.getItem('gemini_api_key');
+    }
+  });
+
+  function showStatus(text) {
+    const box = document.getElementById('statusBox');
+    box.style.display = 'block';
+    box.textContent = text;
+  }
+
+  async function runCollection() {
+    const vault = document.getElementById('vaultName').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
+
+    localStorage.setItem('obsidian_vault', vault);
+    localStorage.setItem('gemini_api_key', apiKey);
+
+    const btn = document.getElementById('fetchBtn');
+    btn.disabled = true;
+
+    try {
+      if (apiKey) {
+        showStatus('Gemini API で本日の重要ニュースを検索・分析中...');
+        try {
+          generatedContent = await fetchFromGemini(apiKey, todayStr);
+        } catch (apiError) {
+          // 429 Quota Exceeded またはその他のエラー時：RSSフォールバックへ
+          if (apiError.message.includes('429') || apiError.message.includes('Quota')) {
+            showStatus('⚠️ APIクォータ上限（429）を検知しました。リアルタイム最新RSSから自動生成します...');
+          } else {
+            showStatus(`⚠️ APIエラー (${apiError.message})。代替ニュースフィードから生成します...`);
+          }
+          await new Promise(r => setTimeout(r, 1000));
+          generatedContent = await fetchFromLiveRSS(todayStr);
+        }
+      } else {
+        showStatus('APIキー未入力のため、リアルタイム最新ニュースフィードから取得中...');
+        generatedContent = await fetchFromLiveRSS(todayStr);
+      }
+
+      document.getElementById('previewArea').textContent = generatedContent;
+      document.getElementById('outputCard').style.display = 'block';
+      showStatus('✅ 最新重要ニュースの収集・要約が完了しました！');
+    } catch (err) {
+      showStatus('❌ エラー: ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // Gemini API呼び出し
+  async function fetchFromGemini(apiKey, dateStr) {
+    const model = 'gemini-3.6-flash';
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const prompt = `
+あなたは世界情勢や業界動向を追うプロフェッショナルリサーチャーです。
+本日（${dateStr}）の最新ニュースを検索・分析し、以下の4カテゴリについて、社会への影響が大きく深刻・重要なニュースを各5件（合計20件）厳選してリスト化してください。
+
+【対象カテゴリ】
+1. AI・テクノロジー
+2. 経済・金融
+3. 政治
+4. エンタメ・カルチャー
+
+【出力フォーマット（既存の日付ノートに追記することを前提とします）】
+以下の形式を厳密に守ってください。
+
+### 🕒 ニュース収集ログ (${new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})})
+
+#### 🤖 1. 最新AIニュース（深刻・重要 5選）
+1. [ニュース見出し](実際のURL)
+   - 重要ポイント・深刻度に関する要約
+   - 背景や社会的影響
+
+#### 📈 2. 最新経済・金融ニュース（深刻・重要 5選）
+...
+
+#### 🏛️ 3. 最新政治ニュース（深刻・重要 5選）
+...
+
+#### 🎭 4. 最新エンタメニュース（深刻・重要 5選）
+...
+`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }]
+      })
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(`APIエラー (${res.status}): ${errJson.error?.message || res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data.candidates[0]?.content?.parts?.[0]?.text;
+  }
+
+  // クォータ超過（429）時やAPIキーなしでも動く最新RSS取得エンジン
+  async function fetchFromLiveRSS(dateStr) {
+    const categories = [
+      { name: '🤖 1. 最新AIニュース（深刻・重要 5選）', query: 'AI 人工知能 規制 脆弱性' },
+      { name: '📈 2. 最新経済・金融ニュース（深刻・重要 5選）', query: '経済 金融 金利 為替 市場' },
+      { name: '🏛️ 3. 最新政治ニュース（深刻・重要 5選）', query: '政治 政府 政策 サミット' },
+      { name: '🎭 4. 最新エンタメニュース（深刻・重要 5選）', query: 'エンタメ 映画 音楽 配信 著作権' }
+    ];
+
+    const timeStr = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'});
+    let result = `\n\n---\n### 🕒 デイリーニュースまとめ (${dateStr} ${timeStr} 追記分)\n\n`;
+
+    for (const cat of categories) {
+      result += `#### ${cat.name}\n`;
+      try {
+        // Google News RSS を CORS Proxy (rss2json) 経由で取得
+        const feedUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cat.query)}&hl=ja&gl=JP&ceid=JP:ja`;
+        const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`;
+        
+        const res = await fetch(proxyUrl);
+        const data = await res.json();
+        
+        if (data.status === 'ok' && data.items && data.items.length > 0) {
+          const items = data.items.slice(0, 5);
+          items.forEach((item, idx) => {
+            const cleanSnippet = (item.description || item.title || '').replace(/<[^>]*>/g, '').slice(0, 80);
+            result += `${idx + 1}. [${item.title}](${item.link})\n`;
+            result += `   - 要約: ${cleanSnippet}...\n`;
+            result += `   - 発行元: ${item.author || '報道各社'} (${item.pubDate ? item.pubDate.split(' ')[0] : dateStr})\n`;
+          });
+        } else {
+          result += `1. [最新の${cat.query}動向に関する報道](https://news.google.com/)\n   - 詳細な分析・続報を確認中\n`;
+        }
+      } catch (e) {
+        result += `1. [本日の重要ニュース一覧](https://news.google.com/)\n   - フィード取得エラーのため直接リンク先を参照\n`;
+      }
+      result += `\n`;
+    }
+
+    return result;
+  }
+
+  async function copyToClipboard() {
+    if (!generatedContent) return;
+    try {
+      await navigator.clipboard.writeText(generatedContent);
+      alert('Markdownをクリップボードにコピーしました！');
+    } catch (e) {
+      alert('コピーに失敗しました。プレビューから直接コピーしてください。');
+    }
+  }
+
+  async function appendToObsidian(useAdvancedUri = false) {
+    if (!generatedContent) return;
+
+    const vault = encodeURIComponent(document.getElementById('vaultName').value.trim() || 'MyVault');
+    const filePath = `News/${todayStr}.md`;
+    const encodedFilePath = encodeURIComponent(filePath);
+
+    try {
+      await navigator.clipboard.writeText(generatedContent);
+    } catch (e) {
+      console.warn('Clipboard error:', e);
+    }
+
+    if (useAdvancedUri) {
+      const encodedData = encodeURIComponent(generatedContent);
+      const advancedUri = `obsidian://advanced-uri?vault=${vault}&filepath=${encodedFilePath}&data=${encodedData}&mode=append`;
+      window.location.href = advancedUri;
+    } else {
+      alert(`「${filePath}」を開きます。\n\n追記用のMarkdownがクリップボードにコピーされていますので、Obsidian上でノート末尾にペースト（貼り付け）してください。`);
+      const openUri = `obsidian://open?vault=${vault}&file=${encodedFilePath}`;
+      window.location.href = openUri;
+    }
+  }
+</script>
+
+</body>
+</html>

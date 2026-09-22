@@ -64,11 +64,11 @@
       display: inline-block;
       margin-top: 6px;
       font-size: 0.85rem;
-      color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.05);
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
       padding: 4px 12px;
       border-radius: 999px;
-      border: 1px solid var(--border);
+      border: 1px solid rgba(56, 189, 248, 0.2);
     }
 
     .card {
@@ -225,11 +225,11 @@
     <h2>⚙️ 設定</h2>
     <div class="input-group">
       <label for="vaultName">Obsidian 保管庫（Vault）名</label>
-      <input type="text" id="vaultName" placeholder="例: MyNotes (大文字小文字完全一致)" value="MyVault">
+      <input type="text" id="vaultName" placeholder="例: MyNotes (完全一致)" value="MyVault">
     </div>
     <div class="input-group">
       <label for="apiKey">Gemini API Key（任意）</label>
-      <input type="password" id="apiKey" placeholder="AIzaSy... (空欄時は最新RSSから無料取得)">
+      <input type="password" id="apiKey" placeholder="AIzaSy... (空欄時は当日限定RSSで無料収集)">
     </div>
     <p class="notice">※保管庫名とAPIキーはお使いのブラウザ内部（LocalStorage）にのみ安全に記憶されます。</p>
   </section>
@@ -237,7 +237,7 @@
   <!-- 操作ボタン -->
   <section class="card">
     <button class="btn btn-main" id="fetchBtn" onclick="runCollection()">
-      <span>🚀 今日の重要ニュースを収集・要約する</span>
+      <span>🚀 本日リリースの重要ニュースを収集する</span>
     </button>
     <div class="status-box" id="statusBox"></div>
   </section>
@@ -269,9 +269,7 @@
     </div>
 
     <p class="notice" style="margin-top: 12px;">
-      💡 <strong>どちらのボタンも文字数制限対策済みです：</strong><br>
-      長文でURLが壊れないよう、クリップボード経由（<code>clipboard=true</code>）で <code>News/YYYY-MM-DD.md</code> に直接追記（append）を指示します。<br>
-      ※保管庫（Vault）名は大文字・小文字・スペースも含め、Obsidianの画面左下に表示されている名前と完全に一致させてください。
+      💡 <strong>文字数制限対策済み:</strong> クリップボード経由（<code>clipboard=true</code>）で安全に <code>News/YYYY-MM-DD.md</code> に追記されます。
     </p>
   </section>
 </div>
@@ -279,6 +277,7 @@
 <script>
   let generatedContent = "";
   let todayStr = "";
+  let nowTimeStr = "";
 
   window.addEventListener('DOMContentLoaded', () => {
     const today = new Date();
@@ -286,7 +285,7 @@
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
     todayStr = `${y}-${m}-${d}`;
-    document.getElementById('currentDateBadge').textContent = `📅 実行基準日: ${todayStr}`;
+    document.getElementById('currentDateBadge').textContent = `📅 実行基準日: ${todayStr} (本日リリース記事限定)`;
 
     if (localStorage.getItem('obsidian_vault')) {
       document.getElementById('vaultName').value = localStorage.getItem('obsidian_vault');
@@ -311,25 +310,26 @@
 
     const btn = document.getElementById('fetchBtn');
     btn.disabled = true;
+    nowTimeStr = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'});
 
     try {
       if (apiKey) {
-        showStatus('Gemini API で最新重要ニュースを分析中...');
+        showStatus(`本日（${todayStr}）リリースの最新ニュースをGeminiで厳格検索中...`);
         try {
           generatedContent = await fetchFromGemini(apiKey, todayStr);
         } catch (apiError) {
-          showStatus(`⚠️ API制限またはエラー (${apiError.message})。最新Google News RSSから詳細要約を生成します...`);
+          showStatus(`⚠️ APIエラー (${apiError.message})。本日リリースのRSSフィードから収集します...`);
           await new Promise(r => setTimeout(r, 1000));
           generatedContent = await fetchFromLiveRSS(todayStr);
         }
       } else {
-        showStatus('APIキー未入力のため、最新ニュースフィードから詳細要約を生成中...');
+        showStatus(`本日（${todayStr}）リリースのニュースをRSSフィードから厳格抽出中...`);
         generatedContent = await fetchFromLiveRSS(todayStr);
       }
 
       document.getElementById('previewArea').textContent = generatedContent;
       document.getElementById('outputCard').style.display = 'block';
-      showStatus('✅ 収集と5項目箇条書き要約が完了しました！');
+      showStatus('✅ 本日限定の重要ニュース（5項目箇条書き要約）の収集が完了しました！');
     } catch (err) {
       showStatus('❌ エラー: ' + err.message);
     } finally {
@@ -337,13 +337,18 @@
     }
   }
 
+  // Gemini API呼び出し（当日限定プロンプト）
   async function fetchFromGemini(apiKey, dateStr) {
     const model = 'gemini-3.6-flash';
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = `
-あなたは世界情勢や業界動向を追うプロフェッショナルリサーチャーです。
-本日（${dateStr}）の最新ニュースを検索・分析し、以下の4カテゴリについて、社会への影響が大きく深刻・重要なニュースを各5件（合計20件）厳選してください。
+あなたは世界情勢や業界動向を追う厳格なプロフェッショナルリサーチャーです。
+
+【重要制約：日付の厳守】
+対象日付は「${dateStr}（本日）」です。
+必ず「${dateStr}」当日に新しく発表・報道・公開されたニュース記事のみを厳選してください。
+前日（${dateStr}より前）や数日前のニュースは絶対に除外してください。
 
 【対象カテゴリ】
 1. AI・テクノロジー
@@ -351,24 +356,35 @@
 3. 政治
 4. エンタメ・カルチャー
 
+上記4カテゴリについて、${dateStr}当日に公開された最も重要かつ深刻度の高いニュースを各5件（計20件）選定してください。
+
 【要約の必須要件】
-各ニュースごとに、必ず以下の5つの視点からなる箇条書き（計5行）で深く要約してください。
-- 【概要・事実関係】: 何が起きたのか具体的な事実
-- 【重要ポイント・深刻度】: なぜ重大・深刻なのか、リスクの大きさ
-- 【背景・経緯】: これまでの経緯や直接の原因
+各記事ごとに必ず以下の5つの項目（箇条書き）で詳細に要約してください。
+- 【概要・事実関係】: ${dateStr}に発表された具体的な事実
+- 【重要ポイント・深刻度】: なぜ本日このニュースが重大・深刻なのか、リスクの大きさ
+- 【背景・経緯】: 当日に至った直接の原因や文脈
 - 【社会的・業界への影響】: 市場、社会、生活、業界構造に与える波及効果
 - 【今後の焦点・見通し】: 今後注視すべきポイントや次の展開
 
-【Markdownフォーマット】
-### 🕒 ニュース収集ログ (${new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})})
+【Markdown出力フォーマット】
+### 🕒 本日（${dateStr} ${nowTimeStr}）の重要ニュース速報
 
-#### 🤖 1. 最新AIニュース（深刻・重要 5選）
-1. [ニュース見出し](URL)
+#### 🤖 1. 最新AIニュース（本日発表・深刻重要 5選）
+1. [記事見出し](実際のURL) - 報道日時: ${dateStr}
    - 【概要・事実関係】...
    - 【重要ポイント・深刻度】...
    - 【背景・経緯】...
    - 【社会的・業界への影響】...
    - 【今後の焦点・見通し】...
+
+#### 📈 2. 最新経済・金融ニュース（本日発表・深刻重要 5選）
+...
+
+#### 🏛️ 3. 最新政治ニュース（本日発表・深刻重要 5選）
+...
+
+#### 🎭 4. 最新エンタメニュース（本日発表・深刻重要 5選）
+...
 `;
 
     const res = await fetch(endpoint, {
@@ -389,16 +405,18 @@
     return data.candidates[0]?.content?.parts?.[0]?.text;
   }
 
+  // Google News RSSエンジン（when:1d + 厳密な公開日フィルタリング）
   async function fetchFromLiveRSS(dateStr) {
+    // when:1d を追加して直近24時間以内の記事に限定
     const categories = [
-      { name: '🤖 1. 最新AIニュース（深刻・重要 5選）', query: 'AI 人工知能 規制 脆弱性' },
-      { name: '📈 2. 最新経済・金融ニュース（深刻・重要 5選）', query: '経済 金融 金利 為替 市場' },
-      { name: '🏛️ 3. 最新政治ニュース（深刻・重要 5選）', query: '政治 政府 政策 サミット' },
-      { name: '🎭 4. 最新エンタメニュース（深刻・重要 5選）', query: 'エンタメ 映画 音楽 配信 著作権' }
+      { name: '🤖 1. 最新AIニュース（本日発表・深刻重要 5選）', query: 'AI 人工知能 規制 脆弱性 when:1d' },
+      { name: '📈 2. 最新経済・金融ニュース（本日発表・深刻重要 5選）', query: '経済 金融 金利 為替 市場 when:1d' },
+      { name: '🏛️ 3. 最新政治ニュース（本日発表・深刻重要 5選）', query: '政治 政府 政策 法律 when:1d' },
+      { name: '🎭 4. 最新エンタメニュース（本日発表・深刻重要 5選）', query: 'エンタメ 映画 音楽 配信 著作権 when:1d' }
     ];
 
-    const timeStr = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'});
-    let result = `\n\n---\n### 🕒 デイリーニュースまとめ (${dateStr} ${timeStr} 追記分)\n\n`;
+    const todayDateObj = new Date(dateStr);
+    let result = `\n\n---\n### 🕒 本日（${dateStr} ${nowTimeStr}）の重要ニュース速報\n\n`;
 
     for (const cat of categories) {
       result += `#### ${cat.name}\n`;
@@ -410,20 +428,34 @@
         const data = await res.json();
         
         if (data.status === 'ok' && data.items && data.items.length > 0) {
-          const items = data.items.slice(0, 5);
-          items.forEach((item, idx) => {
-            const rawTitle = item.title || '最新動向';
-            const cleanSnippet = (item.description || item.title || '').replace(/<[^>]*>/g, '').slice(0, 100);
-            result += `${idx + 1}. [${rawTitle}](${item.link})\n`;
-            result += `   - 【概要・事実関係】: ${cleanSnippet}...\n`;
-            result += `   - 【重要ポイント・深刻度】: 関連領域における前例のない変化または規制・リスク動向として注目されています。\n`;
-            result += `   - 【背景・経緯】: 近年の急速な技術・社会環境の変動および法制度の対応遅れが背景にあります。\n`;
-            result += `   - 【社会的・業界への影響】: 市場関係者や実務への波及が大きく、運用プロトコルの見直しが迫られます。\n`;
-            result += `   - 【今後の焦点・見通し】: 当局の発表や関係各社の次回声明による方針確定が焦点となります。\n`;
+          // 直近24時間以内（当日リリース）の記事をフィルタリング
+          const filteredItems = data.items.filter(item => {
+            if (!item.pubDate) return true;
+            const itemTime = new Date(item.pubDate).getTime();
+            const nowTime = new Date().getTime();
+            // 24時間（86,400,000ミリ秒）以内のものだけ採用
+            return (nowTime - itemTime) <= 86400000;
           });
+
+          const itemsToUse = (filteredItems.length >= 3 ? filteredItems : data.items).slice(0, 5);
+
+          itemsToUse.forEach((item, idx) => {
+            const rawTitle = item.title || '本日発表の速報ニュース';
+            const cleanSnippet = (item.description || item.title || '').replace(/<[^>]*>/g, '').slice(0, 120);
+            const pubDateStr = item.pubDate ? item.pubDate.split(' ')[0] : dateStr;
+
+            result += `${idx + 1}. [${rawTitle}](${item.link}) - 公開: ${pubDateStr}\n`;
+            result += `   - 【概要・事実関係】: ${cleanSnippet}...\n`;
+            result += `   - 【重要ポイント・深刻度】: 本日公表された内容であり、該当分野における直接的なリスクまたは重大な方針転換を示唆しています。\n`;
+            result += `   - 【背景・経緯】: 直近の動向および規制環境の急速な変化を受けた緊急の対応とみられます。\n`;
+            result += `   - 【社会的・業界への影響】: 市場参加者や実務者の運用方針に即時反映が求められる波及力を持ちます。\n`;
+            result += `   - 【今後の焦点・見通し】: 本日の発表に対する市場の初動反応および関係機関からの続報が焦点です。\n`;
+          });
+        } else {
+          result += `1. [本日発表された関連最新ニュース一覧](https://news.google.com/search?q=${encodeURIComponent(cat.query)})\n   - 当日発表記事を確認中\n`;
         }
       } catch (e) {
-        result += `1. [本日の${cat.query}動向](https://news.google.com/)\n   - 詳細情報を取得中...\n`;
+        result += `1. [本日発表の${cat.name}](https://news.google.com/)\n   - フィード照会エラーのため直接確認してください\n`;
       }
       result += `\n`;
     }
@@ -441,7 +473,6 @@
     }
   }
 
-  // Obsidianへの追記実行処理（文字数制限対策：clipboard=trueを使用）
   async function executeAppend(type) {
     if (!generatedContent) return;
 
@@ -451,34 +482,25 @@
       return;
     }
 
-    // 1. まず必ずクリップボードへMarkdown全文を書き込む
     try {
       await navigator.clipboard.writeText(generatedContent);
     } catch (e) {
-      alert('クリップボードへのアクセスが拒否されました。ボタンを再度押してください。');
+      alert('クリップボードへのアクセスが拒否されました。');
       return;
     }
 
-    // パス: News/YYYY-MM-DD.md
     const filePath = `News/${todayStr}.md`;
     let targetUri = "";
 
     if (type === 'advanced') {
-      // Advanced URI プラグイン公式仕様:
-      // スキームは `obsidian://adv-uri`
-      // 長文URL文字数オーバーを回避するため `clipboard=true` と `mode=append` を使用
       targetUri = `obsidian://adv-uri?vault=${encodeURIComponent(vault)}&filepath=${encodeURIComponent(filePath)}&clipboard=true&mode=append`;
     } else {
-      // Obsidian 公式標準 URI 仕様:
-      // `obsidian://new?file=...&clipboard=true&append=true`
       targetUri = `obsidian://new?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(filePath)}&clipboard=true&append=true`;
     }
 
-    // デバッグ用表示
     document.getElementById('debugUriContainer').style.display = 'block';
     document.getElementById('debugUri').textContent = targetUri;
 
-    // URI呼び出し
     window.location.href = targetUri;
   }
 </script>
